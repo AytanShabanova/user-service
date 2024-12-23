@@ -1,0 +1,19 @@
+#Gradle
+.gradle/
+build/
+**/charts
+**/docker-compose*
+**/compose.y*ml
+**/Dockerfile*
+
+# Eclipse
+.classpath
+.project
+.settings/
+bin/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr

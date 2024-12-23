@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: user-serviceApiDesign
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+  datasource:
+    url: jdbc:postgresql://
+    username:
+    password:
+    driver-class-name: org.postgresql.Driver
+
+
+

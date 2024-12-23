@@ -1,0 +1,102 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${MS_NAME}-deployment
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${MS_NAME}
+  annotations:
+    kubernetes.io/change-cause: ${ROLLING_HISTORY}
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: ${MS_NAME}
+  template:
+    metadata:
+      labels:
+        app: ${MS_NAME}
+    spec:
+      containers:
+        - name: ${MS_NAME}
+          image: ${PROD_DOCKER_IMAGE_TAG}
+          resources:
+            limits:
+              memory: ${LIMIT_MEMORY}
+              cpu: ${LIMIT_CPU}
+            requests:
+              memory: ${REQUEST_MEMORY}
+              cpu: ${REQUEST_CPU}
+          ports:
+            - containerPort: 8080
+          # livenessProbe:
+          #   httpGet:
+          #     path: /api/actuator/health/liveness
+          #     port: 80
+          #   initialDelaySeconds: 300
+          #   periodSeconds: 30
+          # readinessProbe:
+          #   httpGet:
+          #     path: /api/actuator/health/readiness
+          #     port: 80
+          #   initialDelaySeconds: 5
+          #   periodSeconds: 5
+          securityContext:
+            privileged:
+      imagePullSecrets:
+        - name: rateinhub
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: ${MS_NAME}
+  name: ${MS_NAME}-svc
+  namespace: ${NAMESPACE}
+spec:
+  ports:
+    - port: 8080
+      protocol: TCP
+      targetPort: 8080
+  selector:
+    app: ${MS_NAME}
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-${MS_NAME}
+  namespace: ${NAMESPACE}
+  annotations:
+    # nginx.ingress.kubernetes.io/auth-realm: Authentication Required - develop
+    # nginx.ingress.kubernetes.io/auth-secret: basic-auth
+    # nginx.ingress.kubernetes.io/auth-type: basic
+    #nginx.ingress.kubernetes.io/rewrite-target: /user
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+#    nginx.ingress.kubernetes.io/enable-cors: "true"
+#    nginx.ingress.kubernetes.io/cors-allow-origin: "http://localhost:3000"
+#    nginx.ingress.kubernetes.io/cors-allow-methods: "PUT, GET, POST, OPTIONS, DELETE"
+#    nginx.ingress.kubernetes.io/cors-allow-headers: "content-type , anti-csrf, rid, fdi-version, authorization, st-auth-mode , cookie"
+#    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+#    nginx.ingress.kubernetes.io/cors-expose-headers: "front-token"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.${DOMAIN}
+      secretName:  web-tls-secret
+  rules:
+    - host: api.${DOMAIN}
+      http:
+        paths:
+          - path: /user
+            pathType: Prefix
+            backend:
+              service:
+                name:  ${MS_NAME}-svc
+                port:
+                  number: 8080

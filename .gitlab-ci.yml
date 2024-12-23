@@ -1,0 +1,72 @@
+stages:
+  - build_image
+  - scan
+  - deploy
+
+variables:
+  APP_NAME: $CI_PROJECT_NAME
+  DOCKER_IMAGE_TAG: ${DO_REGISTRY}/${CI_PROJECT_PATH}/${APP_NAME}:${CI_PIPELINE_ID}
+  ROLLING_HISTORY: $CI_COMMIT_TITLE - $CI_JOB_URL
+  MS_NAME: ms-user
+  PROD_DOCKER_IMAGE_TAG: ${DO_REGISTRY}/${CI_PROJECT_PATH}/${APP_NAME}:${CI_PIPELINE_ID}
+
+.job_template: &job_configuration
+  stage: build_image
+  before_script:
+    - >
+      if [ "${CI_COMMIT_BRANCH}" == "dev" ]; then
+         SPRING_PROFILES="dev";
+      elif [ "${CI_COMMIT_BRANCH}" == "main" ]; then
+         SPRING_PROFILES="prod";
+      fi
+  script:
+    - docker build . -t ${DO_REGISTRY}/${CI_PROJECT_PATH}/${APP_NAME}:${CI_PIPELINE_ID}
+    - docker push ${DO_REGISTRY}/${CI_PROJECT_PATH}/${APP_NAME}:${CI_PIPELINE_ID}
+    - docker image rm ${DO_REGISTRY}/${CI_PROJECT_PATH}/${APP_NAME}:${CI_PIPELINE_ID}
+.job_scan: &job_security_scan
+  stage: scan
+  script:
+    - trivy image --exit-code 0 --severity HIGH,CRITICAL --no-progress ${DOCKER_IMAGE_TAG}
+
+
+build_push_docker_image:
+  <<: *job_configuration
+  tags:
+    - rate-in-shell
+  only:
+    - develop
+    - main
+
+
+scan_docker_image:
+  <<: *job_security_scan
+  tags:
+    - rate-in-shell
+  only:
+    - develop
+    - main
+
+
+deploy to dev k8s:
+  stage: deploy
+  script:
+    - kubectl rollout history deployment -n ${NAMESPACE} ${MS_NAME}-deployment || true
+    - cat k8s.yaml | envsubst | kubectl apply -f -
+    - kubectl get pods -n ${NAMESPACE}
+    - kubectl rollout history deployment -n ${NAMESPACE} ${MS_NAME}-deployment || true
+  only:
+    - develop
+  tags:
+    - rate-in-shell
+
+deploy to prod k8s:
+  stage: deploy
+  script:
+    - kubectl rollout history deployment -n ${NAMESPACE} ${MS_NAME}-deployment || true
+    - cat k8s.yaml | envsubst | kubectl apply -f -
+    - kubectl get pods -n ${NAMESPACE}
+    - kubectl rollout history deployment -n ${NAMESPACE} ${MS_NAME}-deployment|| true
+  only:
+    - main
+  tags:
+    - rate-in-shell
